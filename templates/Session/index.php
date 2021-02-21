@@ -62,11 +62,10 @@ function getPortForClient($client)
   
   <div class="jumbotron">
     
-    <?php if (count($clients) > 1) : ?>
-    
-    <span class="float-right"><a class="btn btn-secondary btn-sm" href="/session/connect">Go to the Patchbay</a></span>
-    
-    <?php endif ?>
+    <span class="float-right">
+      <a class="btn btn-secondary btn-sm" href="/session/connect">Patchbay</a> &nbsp; 
+      <a class="btn btn-secondary btn-sm" href="/session/stream">Stream</a>
+    </span>
   
     <h1 class="display-3">Rejack is <span class="text-primary">Online</span></h1>
     
@@ -136,9 +135,11 @@ function getPortForClient($client)
         <div class="card-body">
           <div class="card-text">          
             <span class="badge badge-pill badge-info float-right">
+              <?php if (isset($parts['out'])) : ?>
               <?= count($parts['out']) ?> <?= count($parts['out']) > 1 ? 'channels' : 'channel' ?>
+              <?php endif ?>
             </span> <br /> 
-            <strong><?= h($client) ?></strong> <br/>
+            <span class="text-secondary"><strong><?= h($client) ?></strong></span> <br/>
             <small><a href="#" class="text-info" id="<?= h($client) ?>_opener">Connection Instructions</a></small>  
             <div class="modal-dialog" role="document" id="<?= h($client) ?>_instructions">
               <p>

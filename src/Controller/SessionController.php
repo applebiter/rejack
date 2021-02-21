@@ -9,6 +9,7 @@ use App\Form\JoinForm;
 use App\Form\LeaveForm;
 use App\Form\ConnectForm;
 use App\Form\DisconnectForm;
+use App\Form\StreamForm;
 use Cake\Core\Configure;
 use Cake\Utility\Xml;
 use Exception;
@@ -47,6 +48,8 @@ class SessionController extends AppController
             $this->clearClients();
             $this->clearPorts();
         }
+        
+        $this->killZombies();
         
         $this->set('isRunning', $this->isRunning);
         $this->set('pid', $this->pid);
@@ -178,6 +181,31 @@ class SessionController extends AppController
         return $this->redirect($this->referer());
     }
     
+    public function stream() 
+    {
+        $form = new StreamForm();
+        
+        if ($this->isRunning) 
+        {
+            if ($this->request->is(['patch', 'post', 'put']))
+            {
+                $form->execute($this->request->getData());
+                
+                return $this->redirect($this->referer());
+            }
+            
+            $host = Configure::read('Rejack.Default.StreamConfig.IcecastHost');
+            $port = Configure::read('Rejack.Default.StreamConfig.IcecastPort');
+            $proto = Configure::read('Rejack.Default.StreamConfig.SSL') ? 'https' : 'http';
+            $raw = file_get_contents("$proto://$host:$port/status-json.xsl");
+            $stats = json_decode($raw);
+            
+            $this->set('stats', $stats);
+        }
+        
+        $this->set('form', $form);
+    }
+    
     /**
      * Theme method 
      * 
@@ -292,6 +320,11 @@ class SessionController extends AppController
                 $client = $parts[0];
                 $channel = $parts[1];
                 
+                if (false !== strpos($client, 'jstdout'))
+                {
+                    continue;
+                }
+                
                 if (strripos(trim($channel), 'capture') !== false 
                     || strripos(trim($channel), 'receive') !== false 
                     || strripos(trim($channel), 'in') !== false)
@@ -353,31 +386,78 @@ class SessionController extends AppController
     protected function loadCurrentSnapshot() 
     {
         $dir = Configure::read('Rejack.SnapshotsDir');
-        $snap = $dir . DS . 'current.snap';        
+        $file = $dir . DS . 'current.xml';        
         $cmd = sprintf(Configure::read('Rejack.Commands.snapshot'), $dir, 'current');
         
         shell_exec($cmd);
-        usleep(250000);        
+        usleep(250000);   
         
-        $xml = file_get_contents($snap);
-        $snapshot = Xml::build($xml);
+        $xml = file_get_contents($file); 
+        $snap = Xml::build($xml);
         
-        foreach ($snapshot->jack->client as $client) 
+        foreach ($snap->jack->client as $client) 
         {
-            $clientname = (string) $client['name'];
+            $clientName = (string) $client['name'];
             
-            foreach ($client->port as $receiver)
+            foreach ($client->port as $port) 
             {
-                $receivername = (string) $receiver['name'];
+                $portName = (string) $port['name'];
                 
-                foreach ($receiver->connection as $sender)
-                { 
-                    $source = (string) $sender['port'];
-                    $sourceArr = explode(':', $source);
-                    $sourceClient = $sourceArr[0];
-                    $sourceChannel = $sourceArr[1];
-                    
-                    $this->currentSnapshot[$clientname][$receivername][$sourceClient][] = $sourceChannel;
+                if (isset($port->connection)) 
+                {
+                    foreach ($port->connection as $connection) 
+                    {
+                        if (false !== strpos((string) $connection['port'], 'jstdout'))
+                        {
+                            continue;
+                        }
+                        
+                        $this->currentSnapshot[$clientName][$portName][] = (string) $connection['port'];
+                    }
+                }
+            }
+        }
+    }
+    
+    protected function killZombies() 
+    {
+        $code = null;
+        $output = [];
+        $zids = [];
+        exec('ps aux | egrep "Z|defunct"', $output, $code);
+        
+        array_shift($output);
+        array_pop($output);
+        
+        if (count($output) > 1) 
+        {
+            foreach ($output as $line)
+            {
+                $parts = explode(' ', $line);
+                $pos = 0;
+                
+                foreach ($parts as $part)
+                {
+                    if ($part)
+                    {
+                        $pos++;
+                        
+                        if ($pos == 1)
+                        {
+                            $zids[] = $part;
+                        }
+                    }
+                }
+            }
+            
+            foreach ($zids as $zombie)
+            {
+                $ppid = shell_exec("ps -o ppid= $zombie");
+                $ppid = $ppid ? trim($ppid) : $ppid;
+                
+                if ($ppid) 
+                {
+                    shell_exec("kill -kill $ppid");
                 }
             }
         }

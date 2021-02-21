@@ -17,6 +17,7 @@ return [
         'PortsDir' => ROOT . DS . 'data' . DS . 'ports',
         'ClientsDir' => ROOT . DS . 'data' . DS . 'clients',
         'SnapshotsDir' => ROOT . DS . 'data' . DS . 'snapshots',
+        'StreamsDir' => ROOT . DS . 'data' . DS . 'streams',
         'Commands' => [ 
             'isRunning' => 'jack_wait -c', 
             'bufsize' => 'jack_bufsize',
@@ -26,8 +27,18 @@ return [
             'join' => 'jacktrip -s --bindport %d -n %d --clientname \'%s\' > \'%s/%s.log\' 2>&1 & echo $!',
             'connect' => 'jack_connect %s:%s %s:%s', 
             'disconnect' => 'jack_disconnect %s %s',
-            'snapshot' => 'aj-snapshot -fj %s/%s.snap',
+            'snapshot' => 'aj-snapshot -qfj %s/%s.xml',
             'loadClients' => 'jack_lsp',
+            'stream' => 'jack-stdout -d 0 %s | oggenc -r -R %d -B 16 -C %d -q %d - | oggfwd -n "%s" -d "%s" %s %d "%s" /%s.ogg', 
+        ],
+        'Default' => [ 
+            'StreamConfig' => [ 
+                'IcecastHost' => 'localhost', 
+                'IcecastPort' => 8000, 
+                'SourcePasswd' => 'hackme',
+                'OggencQuality' => 3,
+                'SSL' => false,
+            ],
         ],
     ]
 ];
